@@ -219,6 +219,12 @@
   }
   .photo-box img{width:100%; height:100%; object-fit:cover;}
   .photo-box .plus{color:var(--blue-soft); font-size:calc(22px * var(--fs-scale)); font-weight:300;}
+  .photo-size-btns{display:flex; gap:4px;}
+  .photo-size-btn{
+    background:none; border:1px solid var(--blue-pale); color:var(--blue-mid);
+    width:20px; height:18px; border-radius:3px; cursor:pointer; font-size:12px; line-height:1; padding:0;
+  }
+  .photo-size-btn:hover{background:var(--blue-pale); border-color:var(--blue-mid);}
   .photo-box:hover{border-color:var(--blue-mid);}
   .photo-label{font-size:calc(9px * var(--fs-scale)); color:var(--blue-soft); font-family:'IBM Plex Mono',monospace;}
   .photo-remove{font-size:calc(9px * var(--fs-scale)); color:var(--danger); cursor:pointer; background:none; border:none; padding:0; font-family:'Inter',sans-serif;}
@@ -329,7 +335,7 @@
   /* ===== Print ===== */
   @media print{
     .table-scroll{overflow:visible;}
-    .toolbar, .add-row, .row-del, .col-act, .col-remove, .move-btns, .col-move, .fs-popup, .resize-hint{display:none !important;}
+    .toolbar, .add-row, .row-del, .col-act, .col-remove, .move-btns, .col-move, .photo-size-btns, .fs-popup, .resize-hint{display:none !important;}
     body{background:#fff;}
     .sheet-wrap{padding:0;}
     .sheet{max-width:100%; border:none; box-shadow:none;}
@@ -421,7 +427,6 @@
       <thead>
         <tr id="headerRow">
           <th class="col-sr" contenteditable="true" id="thSr">Sr No</th>
-          <th class="col-photo" contenteditable="true" id="thPhoto">Reference Photo</th>
           <th class="col-act"><button class="add-col-btn" id="addColBtn" title="Add column">+</button></th>
         </tr>
       </thead>
@@ -555,12 +560,13 @@ function freshCatalogData(name, withDefaults){
     readyBadge: 'For Customer Review',
     eyebrow: 'Bill of Parts — Reference Catalog',
     stampLabel: 'Total Items',
-    thSr: 'Sr No', thPhoto: 'Reference Photo',
+    thSr: 'Sr No',
     columns: [
       {id:'desc', label:'Description', emphasis:true},
       {id:'sizes', label:'Sizes / Variants'},
       {id:'spec', label:'Matl. Spec.'},
       {id:'drg', label:'Drawing No.'},
+      {id:'__photo__', label:'Reference Photo', isPhoto:true},
     ],
     parts: withDefaults ? defaultParts() : [{id:uid(), sr:'1', desc:'New Part', sizes:'', spec:'', drg:'', photo:null}],
   };
@@ -624,7 +630,6 @@ function applyCurrentToDom(){
   document.getElementById('eyebrow').innerText = current.eyebrow ?? 'Bill of Parts — Reference Catalog';
   document.getElementById('stampLabel').innerText = current.stampLabel ?? 'Total Items';
   document.getElementById('thSr').innerText = current.thSr ?? 'Sr No';
-  document.getElementById('thPhoto').innerText = current.thPhoto ?? 'Reference Photo';
   applyAllStoredFontSizes();
   if(!current.columns || !current.columns.length){
     current.columns = [
@@ -633,6 +638,9 @@ function applyCurrentToDom(){
       {id:'spec', label:'Matl. Spec.'},
       {id:'drg', label:'Drawing No.'},
     ];
+  }
+  if(!current.columns.some(c => c.isPhoto)){
+    current.columns.push({id:'__photo__', label: current.thPhoto || 'Reference Photo', isPhoto:true});
   }
   renderHeaderColumns();
   renderParts();
@@ -653,40 +661,43 @@ function readDomIntoCurrent(){
   current.eyebrow = document.getElementById('eyebrow').innerText;
   current.stampLabel = document.getElementById('stampLabel').innerText;
   current.thSr = document.getElementById('thSr').innerText;
-  current.thPhoto = document.getElementById('thPhoto').innerText;
 }
 
 function renderHeaderColumns(){
   const headerRow = document.getElementById('headerRow');
-  const photoTh = document.getElementById('thPhoto');
-  headerRow.querySelectorAll('.col-dyn').forEach(el => el.remove());
+  const actionTh = headerRow.querySelector('.col-act');
+  headerRow.querySelectorAll('.col-dyn, .col-photo').forEach(el => el.remove());
   current.columns.forEach((col, idx) => {
     const th = document.createElement('th');
-    th.className = 'col-dyn';
+    th.className = col.isPhoto ? 'col-photo' : 'col-dyn';
     th.dataset.colId = col.id;
     const isFirst = idx === 0;
     const isLast = idx === current.columns.length - 1;
+    const removeBtn = col.isPhoto ? '' : `<button class="col-remove" title="Remove column">&times;</button>`;
     th.innerHTML = `
       <button class="col-move col-move-left" title="Move left" ${isFirst ? 'disabled' : ''}>&larr;</button>
       <button class="col-move col-move-right" title="Move right" ${isLast ? 'disabled' : ''}>&rarr;</button>
       <div class="th-label" contenteditable="true" data-fskey="th:${col.id}">${escapeHtml(col.label)}</div>
-      <button class="col-remove" title="Remove column">&times;</button>`;
+      ${removeBtn}`;
     applyStoredFontSize(th.querySelector('.th-label'));
     th.querySelector('.th-label').addEventListener('blur', (e) => {
       col.label = e.target.innerText.trim() || col.label;
       saveCatalog();
     });
-    th.querySelector('.col-remove').addEventListener('click', () => {
-      if(!confirm('Remove the "' + col.label + '" column from this list? This deletes that value from every row.')) return;
-      current.columns = current.columns.filter(c => c.id !== col.id);
-      current.parts.forEach(p => { delete p[col.id]; });
-      renderHeaderColumns();
-      renderParts();
-      saveCatalog();
-    });
+    const rmBtn = th.querySelector('.col-remove');
+    if(rmBtn){
+      rmBtn.addEventListener('click', () => {
+        if(!confirm('Remove the "' + col.label + '" column from this list? This deletes that value from every row.')) return;
+        current.columns = current.columns.filter(c => c.id !== col.id);
+        current.parts.forEach(p => { delete p[col.id]; });
+        renderHeaderColumns();
+        renderParts();
+        saveCatalog();
+      });
+    }
     th.querySelector('.col-move-left').addEventListener('click', () => moveColumn(idx, -1));
     th.querySelector('.col-move-right').addEventListener('click', () => moveColumn(idx, 1));
-    headerRow.insertBefore(th, photoTh);
+    headerRow.insertBefore(th, actionTh);
   });
 }
 
@@ -722,7 +733,7 @@ function applyStoredFontSize(el){
   el.style.fontSize = size ? size + 'px' : '';
 }
 
-const STATIC_FS_IDS = ['companyName','companyTag','companyAddr','companyPhone','catalogTitle','catalogSub','signoff','termsBody','termsTitle','metaLine','readyBadge','eyebrow','stampLabel','thSr','thPhoto'];
+const STATIC_FS_IDS = ['companyName','companyTag','companyAddr','companyPhone','catalogTitle','catalogSub','signoff','termsBody','termsTitle','metaLine','readyBadge','eyebrow','stampLabel','thSr'];
 
 function applyAllStoredFontSizes(){
   STATIC_FS_IDS.forEach(id => applyStoredFontSize(document.getElementById(id)));
@@ -741,20 +752,29 @@ function renderParts(){
     const tr = document.createElement('tr');
     const isFirst = idx === 0;
     const isLast = idx === current.parts.length - 1;
-    const dynCells = current.columns.map(col => `
-      <td class="col-dyn"><div class="dyn-field resizable" data-emphasis="${col.emphasis ? '1' : '0'}" contenteditable="true" data-field="${col.id}" data-fskey="cell:${p.id}:${col.id}">${escapeHtml(p[col.id] || '')}</div></td>
-    `).join('');
-    tr.innerHTML = `
-      <td class="col-sr" contenteditable="true" data-field="sr" data-fskey="cell:${p.id}:sr">${escapeHtml(p.sr)}</td>
-      ${dynCells}
+    const size = p.photoSize || 80;
+    const cells = current.columns.map(col => {
+      if(col.isPhoto){
+        return `
       <td class="col-photo">
         <div class="photo-cell">
-          <div class="photo-box" data-action="upload">
+          <div class="photo-box" data-action="upload" style="width:${size}px; height:${size}px;">
             ${p.photo ? `<img src="${p.photo}">` : `<span class="plus">+</span>`}
+          </div>
+          <div class="photo-size-btns">
+            <button class="photo-size-btn" data-action="shrink" title="Smaller">&minus;</button>
+            <button class="photo-size-btn" data-action="grow" title="Bigger">&plus;</button>
           </div>
           ${p.photo ? `<button class="photo-remove" data-action="removephoto">remove</button>` : `<span class="photo-label">add photo</span>`}
         </div>
-      </td>
+      </td>`;
+      }
+      return `
+      <td class="col-dyn"><div class="dyn-field resizable" data-emphasis="${col.emphasis ? '1' : '0'}" contenteditable="true" data-field="${col.id}" data-fskey="cell:${p.id}:${col.id}">${escapeHtml(p[col.id] || '')}</div></td>`;
+    }).join('');
+    tr.innerHTML = `
+      <td class="col-sr" contenteditable="true" data-field="sr" data-fskey="cell:${p.id}:sr">${escapeHtml(p.sr)}</td>
+      ${cells}
       <td class="col-act">
         <div class="act-cell">
           <div class="move-btns">
@@ -784,7 +804,12 @@ function renderParts(){
     if(upBtn) upBtn.addEventListener('click', () => moveRow(idx, -1));
     const downBtn = tr.querySelector('[data-action="down"]');
     if(downBtn) downBtn.addEventListener('click', () => moveRow(idx, 1));
-    tr.querySelector('[data-action="upload"]').addEventListener('click', () => triggerUpload(p));
+    const uploadEl = tr.querySelector('[data-action="upload"]');
+    if(uploadEl) uploadEl.addEventListener('click', () => triggerUpload(p));
+    const shrinkBtn = tr.querySelector('[data-action="shrink"]');
+    if(shrinkBtn) shrinkBtn.addEventListener('click', () => resizePhoto(p, -15));
+    const growBtn = tr.querySelector('[data-action="grow"]');
+    if(growBtn) growBtn.addEventListener('click', () => resizePhoto(p, 15));
     const rmBtn = tr.querySelector('[data-action="removephoto"]');
     if(rmBtn){
       rmBtn.addEventListener('click', () => {
@@ -795,6 +820,13 @@ function renderParts(){
     }
   });
   updateCounts();
+}
+
+function resizePhoto(p, delta){
+  const current_size = p.photoSize || 80;
+  p.photoSize = Math.max(50, Math.min(220, current_size + delta));
+  renderParts();
+  saveCatalog();
 }
 
 function triggerUpload(p){
@@ -919,7 +951,7 @@ function bumpFontSize(delta){
 document.getElementById('fsPopupMinus').addEventListener('mousedown', (e) => { e.preventDefault(); bumpFontSize(-1); });
 document.getElementById('fsPopupPlus').addEventListener('mousedown', (e) => { e.preventDefault(); bumpFontSize(1); });
 
-['companyName','companyTag','companyAddr','companyPhone','catalogTitle','catalogSub','signoff','termsBody','termsTitle','metaLine','readyBadge','eyebrow','stampLabel','thSr','thPhoto'].forEach(id => {
+['companyName','companyTag','companyAddr','companyPhone','catalogTitle','catalogSub','signoff','termsBody','termsTitle','metaLine','readyBadge','eyebrow','stampLabel','thSr'].forEach(id => {
   document.getElementById(id).addEventListener('blur', () => {
     readDomIntoCurrent();
     saveCatalog();
