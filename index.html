@@ -104,13 +104,13 @@
 
   /* ---- Wave letterhead banner ---- */
   .wave-banner{
-    position:relative; height:128px; background:#ffffff; overflow:hidden;
+    position:relative; min-height:128px; background:#ffffff; overflow:visible;
     border-bottom:3px solid var(--navy-deep);
   }
-  .wave-banner svg{position:absolute; inset:0; width:100%; height:100%; display:block; opacity:.55;}
+  .wave-banner svg{position:absolute; inset:0; width:100%; height:100%; display:block; opacity:.55; z-index:0;}
   .wave-content{
-    position:relative; z-index:2; height:100%;
-    display:flex; align-items:center; gap:16px; padding:0 26px;
+    position:relative; z-index:2; min-height:128px;
+    display:flex; align-items:center; gap:16px; padding:10px 26px;
   }
   .wave-logo{
     width:80px; height:80px; flex-shrink:0;
@@ -170,7 +170,7 @@
     background:var(--navy-deep); color:var(--white);
     font-family:'IBM Plex Mono',monospace; font-size:calc(10.5px * var(--fs-scale)); letter-spacing:.08em;
     text-transform:uppercase; text-align:left; padding:10px 12px; font-weight:500;
-    border-right:1px solid rgba(255,255,255,.15); position:relative;
+    border-right:1px solid rgba(255,255,255,.15); position:relative; white-space:nowrap;
   }
   table.parts thead th:last-child{border-right:none;}
   table.parts tbody td{
@@ -185,7 +185,7 @@
   [contenteditable]{outline:none; border-radius:2px;}
   [contenteditable]:hover{background:#eaf4fb;}
   [contenteditable]:focus{background:var(--blue-pale); box-shadow:0 0 0 1px var(--blue-mid) inset;}
-  .dyn-field{font-family:'IBM Plex Mono',monospace; font-size:calc(12px * var(--fs-scale)); color:var(--steel); white-space:pre-wrap;}
+  .dyn-field{font-family:'Inter',sans-serif; font-size:calc(13px * var(--fs-scale)); color:var(--ink); white-space:pre-wrap; line-height:1.4;}
   .dyn-field[data-emphasis="1"]{font-weight:600; color:var(--navy-deep); font-family:'Inter',sans-serif; font-size:calc(13.5px * var(--fs-scale));}
 
   /* resizable cell content boxes */
@@ -195,7 +195,7 @@
   .dyn-field.resizable{ resize:vertical; }
 
   /* editable column header label + remove button */
-  .th-label{outline:none; display:inline-block; max-width:calc(100% - 16px); vertical-align:middle; padding-left:36px;}
+  .th-label{outline:none; display:inline-block; max-width:calc(100% - 16px); vertical-align:middle; padding-left:36px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .th-label:hover{background:rgba(255,255,255,.15);}
   .th-label:focus{background:rgba(255,255,255,.22);}
   .col-remove{
@@ -217,7 +217,7 @@
     display:flex; align-items:center; justify-content:center; overflow:hidden; cursor:pointer;
     background:var(--blue-wash); position:relative; resize:both; min-width:56px; min-height:56px; max-width:220px; max-height:220px;
   }
-  .photo-box img{width:100%; height:100%; object-fit:cover;}
+  .photo-box img{width:100%; height:100%; max-width:100%; max-height:100%; object-fit:cover; display:block; min-width:0; min-height:0;}
   .photo-box .plus{color:var(--blue-soft); font-size:calc(22px * var(--fs-scale)); font-weight:300;}
   .photo-size-btns{display:flex; gap:4px;}
   .photo-size-btn{
@@ -327,7 +327,7 @@
     .photo-box{width:56px; height:56px;}
     table.parts thead th, table.parts tbody td{padding:7px 8px;}
     .col-photo{width:80px;}
-    .col-dyn{min-width:110px;}
+    .col-dyn{min-width:130px;}
 
     .fs-popup{transform:scale(.95);}
   }
@@ -335,7 +335,7 @@
   /* ===== Print ===== */
   @media print{
     .table-scroll{overflow:visible;}
-    .toolbar, .add-row, .row-del, .col-act, .col-remove, .move-btns, .col-move, .photo-size-btns, .fs-popup, .resize-hint{display:none !important;}
+    .toolbar, .add-row, .row-del, .col-act, .col-remove, .move-btns, .col-move, .photo-size-btns, .photo-remove, .photo-label, .fs-popup, .resize-hint{display:none !important;}
     body{background:#fff;}
     .sheet-wrap{padding:0;}
     .sheet{max-width:100%; border:none; box-shadow:none;}
@@ -370,6 +370,7 @@
       <span class="fs-val" id="fsVal">100%</span>
       <button class="fs-btn" id="fsUp" title="Bigger text">A+</button>
     </div>
+    <button class="btn btn-ghost" id="refreshBtn" title="Pull latest from the database">&#8635; Refresh</button>
     <button class="btn btn-ghost" id="resetBtn">Clear items</button>
     <button class="btn btn-amber" id="downloadBtn">Download PDF</button>
   </div>
@@ -472,27 +473,27 @@ async function getAppSecret(){
   return secret;
 }
 
-let cloudOK = true; // flips false if the API is unreachable, so we don't hammer it every call
+let lastSyncOK = null; // null = unknown yet, true/false reflects the most recent attempt
 
 const storage = {
   async get(key){
-    if(cloudOK){
-      try{
-        const secret = await getAppSecret();
-        const res = await fetch('/api/kv?key=' + encodeURIComponent(key), {
-          headers: { 'X-App-Secret': secret }
-        });
-        if(res.ok){
-          const data = await res.json();
-          if(data.value !== null && data.value !== undefined){
-            try{ localStorage.setItem(key, data.value); }catch(e){}
-            return { key, value: data.value };
-          }
-          return null;
+    try{
+      const secret = await getAppSecret();
+      const res = await fetch('/api/kv?key=' + encodeURIComponent(key), {
+        headers: { 'X-App-Secret': secret }
+      });
+      if(res.ok){
+        lastSyncOK = true;
+        const data = await res.json();
+        if(data.value !== null && data.value !== undefined){
+          try{ localStorage.setItem(key, data.value); }catch(e){}
+          return { key, value: data.value };
         }
-        if(res.status === 401){ alert('Wrong access code — reload the page and try again.'); }
-      }catch(e){ cloudOK = false; }
-    }
+        return null;
+      }
+      if(res.status === 401){ alert('Wrong access code — reload the page and try again.'); }
+      lastSyncOK = false;
+    }catch(e){ lastSyncOK = false; }
     try{
       const v = localStorage.getItem(key);
       return v === null ? null : { key, value: v };
@@ -500,17 +501,15 @@ const storage = {
   },
   async set(key, value){
     try{ localStorage.setItem(key, value); }catch(e){}
-    if(cloudOK){
-      try{
-        const secret = await getAppSecret();
-        const res = await fetch('/api/kv', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-App-Secret': secret },
-          body: JSON.stringify({ key, value })
-        });
-        if(!res.ok && res.status !== 401) cloudOK = false;
-      }catch(e){ cloudOK = false; }
-    }
+    try{
+      const secret = await getAppSecret();
+      const res = await fetch('/api/kv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-App-Secret': secret },
+        body: JSON.stringify({ key, value })
+      });
+      lastSyncOK = res.ok || res.status === 401;
+    }catch(e){ lastSyncOK = false; }
     return { key, value };
   }
 };
@@ -759,11 +758,12 @@ function renderParts(){
       <td class="col-photo">
         <div class="photo-cell">
           <div class="photo-box" data-action="upload" style="width:${size}px; height:${size}px;">
-            ${p.photo ? `<img src="${p.photo}">` : `<span class="plus">+</span>`}
+            ${p.photo ? `<img src="${p.photo}" style="object-fit:${p.photoFit || 'cover'};">` : `<span class="plus">+</span>`}
           </div>
           <div class="photo-size-btns">
             <button class="photo-size-btn" data-action="shrink" title="Smaller">&minus;</button>
             <button class="photo-size-btn" data-action="grow" title="Bigger">&plus;</button>
+            ${p.photo ? `<button class="photo-size-btn" data-action="togglefit" title="Toggle crop / fit whole photo">${p.photoFit === 'contain' ? '⤢' : '⛶'}</button>` : ''}
           </div>
           ${p.photo ? `<button class="photo-remove" data-action="removephoto">remove</button>` : `<span class="photo-label">add photo</span>`}
         </div>
@@ -810,6 +810,12 @@ function renderParts(){
     if(shrinkBtn) shrinkBtn.addEventListener('click', () => resizePhoto(p, -15));
     const growBtn = tr.querySelector('[data-action="grow"]');
     if(growBtn) growBtn.addEventListener('click', () => resizePhoto(p, 15));
+    const fitBtn = tr.querySelector('[data-action="togglefit"]');
+    if(fitBtn) fitBtn.addEventListener('click', () => {
+      p.photoFit = p.photoFit === 'contain' ? 'cover' : 'contain';
+      renderParts();
+      saveCatalog();
+    });
     const rmBtn = tr.querySelector('[data-action="removephoto"]');
     if(rmBtn){
       rmBtn.addEventListener('click', () => {
@@ -883,6 +889,24 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 });
 
 document.getElementById('downloadBtn').addEventListener('click', () => window.print());
+
+document.getElementById('refreshBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  btn.innerText = 'Syncing…';
+  await loadIndex();
+  if(!index.length){
+    index = [{id: activeId || 'bogie-bolster', name: current ? current.catalogTitle : 'BOP List — Bogie Bolster'}];
+  }
+  const stillExists = index.find(x => x.id === activeId);
+  const targetId = stillExists ? activeId : index[0].id;
+  await switchTo(targetId);
+  btn.disabled = false;
+  btn.innerHTML = '&#8635; Refresh';
+  if(lastSyncOK === false){
+    alert('Could not reach the database — showing the last saved copy on this device instead. Check your internet connection and try Refresh again.');
+  }
+});
 
 function setFontScale(scale, doSave){
   scale = Math.min(1.6, Math.max(0.75, scale));
