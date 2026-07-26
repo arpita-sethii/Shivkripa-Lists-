@@ -228,6 +228,10 @@
   .photo-box:hover{border-color:var(--blue-mid);}
   .photo-label{font-size:calc(9px * var(--fs-scale)); color:var(--blue-soft); font-family:'IBM Plex Mono',monospace;}
   .photo-remove{font-size:calc(9px * var(--fs-scale)); color:var(--danger); cursor:pointer; background:none; border:none; padding:0; font-family:'Inter',sans-serif;}
+  .photo-links{display:flex; gap:8px;}
+  .photo-links .photo-remove:first-child{color:var(--blue-mid);}
+  .photo-box.has-photo{cursor:grab;}
+  .photo-box.has-photo:active{cursor:grabbing;}
 
   .row-del{
     background:none; border:1px solid rgba(165,64,47,.4); color:var(--danger);
@@ -370,6 +374,7 @@
       <span class="fs-val" id="fsVal">100%</span>
       <button class="fs-btn" id="fsUp" title="Bigger text">A+</button>
     </div>
+    <button class="btn btn-ghost" id="saveBtn" title="Save now to the database">&#128190; Save</button>
     <button class="btn btn-ghost" id="refreshBtn" title="Pull latest from the database">&#8635; Refresh</button>
     <button class="btn btn-ghost" id="resetBtn">Clear items</button>
     <button class="btn btn-amber" id="downloadBtn">Download PDF</button>
@@ -586,14 +591,40 @@ async function saveIndex(){
 async function loadCatalog(id){
   try{
     const res = await storage.get(DATA_PREFIX + id);
-    if(res && res.value) return JSON.parse(res.value);
+    if(res && res.value){
+      const data = JSON.parse(res.value);
+      await Promise.all((data.parts || []).map(async p => {
+        if(p._hasPhoto){
+          try{
+            const photoRes = await storage.get('photo:' + p.id);
+            p.photo = photoRes ? photoRes.value : null;
+          }catch(e){ p.photo = null; }
+        }
+      }));
+      return data;
+    }
   }catch(e){}
   return null;
 }
 
 async function saveCatalog(){
   if(!activeId || !current) return;
-  try{ await storage.set(DATA_PREFIX + activeId, JSON.stringify(current)); }catch(e){}
+  try{
+    await Promise.all(current.parts.map(async p => {
+      if(p.photo && p.photo.startsWith('data:')){
+        await storage.set('photo:' + p.id, p.photo);
+        p._hasPhoto = true;
+      } else {
+        p._hasPhoto = false;
+      }
+    }));
+    const lightCopy = JSON.parse(JSON.stringify(current));
+    lightCopy.parts = lightCopy.parts.map(p => {
+      const {photo, ...rest} = p;
+      return rest;
+    });
+    await storage.set(DATA_PREFIX + activeId, JSON.stringify(lightCopy));
+  }catch(e){}
 }
 
 async function setActive(id){
@@ -757,15 +788,15 @@ function renderParts(){
         return `
       <td class="col-photo">
         <div class="photo-cell">
-          <div class="photo-box" data-action="upload" style="width:${size}px; height:${size}px;">
-            ${p.photo ? `<img src="${p.photo}" style="object-fit:${p.photoFit || 'cover'};">` : `<span class="plus">+</span>`}
+          <div class="photo-box ${p.photo ? 'has-photo' : ''}" data-action="upload" style="width:${size}px; height:${size}px;">
+            ${p.photo ? `<img src="${p.photo}" style="object-fit:${p.photoFit || 'cover'}; object-position:${p.photoPosX ?? 50}% ${p.photoPosY ?? 50}%;">` : `<span class="plus">+</span>`}
           </div>
           <div class="photo-size-btns">
             <button class="photo-size-btn" data-action="shrink" title="Smaller">&minus;</button>
             <button class="photo-size-btn" data-action="grow" title="Bigger">&plus;</button>
             ${p.photo ? `<button class="photo-size-btn" data-action="togglefit" title="Toggle crop / fit whole photo">${p.photoFit === 'contain' ? '⤢' : '⛶'}</button>` : ''}
           </div>
-          ${p.photo ? `<button class="photo-remove" data-action="removephoto">remove</button>` : `<span class="photo-label">add photo</span>`}
+          ${p.photo ? `<div class="photo-links"><button class="photo-remove" data-action="changephoto">change</button><button class="photo-remove" data-action="removephoto">remove</button></div><span class="photo-label">drag photo to reposition</span>` : `<span class="photo-label">add photo</span>`}
         </div>
       </td>`;
       }
@@ -805,7 +836,13 @@ function renderParts(){
     const downBtn = tr.querySelector('[data-action="down"]');
     if(downBtn) downBtn.addEventListener('click', () => moveRow(idx, 1));
     const uploadEl = tr.querySelector('[data-action="upload"]');
-    if(uploadEl) uploadEl.addEventListener('click', () => triggerUpload(p));
+    if(uploadEl){
+      if(!p.photo){
+        uploadEl.addEventListener('click', () => triggerUpload(p));
+      } else {
+        wirePhotoDrag(uploadEl, p);
+      }
+    }
     const shrinkBtn = tr.querySelector('[data-action="shrink"]');
     if(shrinkBtn) shrinkBtn.addEventListener('click', () => resizePhoto(p, -15));
     const growBtn = tr.querySelector('[data-action="grow"]');
@@ -816,10 +853,13 @@ function renderParts(){
       renderParts();
       saveCatalog();
     });
+    const changeBtn = tr.querySelector('[data-action="changephoto"]');
+    if(changeBtn) changeBtn.addEventListener('click', () => triggerUpload(p));
     const rmBtn = tr.querySelector('[data-action="removephoto"]');
     if(rmBtn){
       rmBtn.addEventListener('click', () => {
         p.photo = null;
+        p._hasPhoto = false;
         renderParts();
         saveCatalog();
       });
@@ -835,20 +875,82 @@ function resizePhoto(p, delta){
   saveCatalog();
 }
 
+function wirePhotoDrag(box, p){
+  let dragging = false;
+  let start = null;
+  box.style.touchAction = 'none';
+  box.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    start = { x: e.clientX, y: e.clientY, posX: p.photoPosX ?? 50, posY: p.photoPosY ?? 50 };
+    try{ box.setPointerCapture(e.pointerId); }catch(err){}
+    box.style.cursor = 'grabbing';
+  });
+  box.addEventListener('pointermove', (e) => {
+    if(!dragging) return;
+    const rect = box.getBoundingClientRect();
+    const dxPct = ((e.clientX - start.x) / rect.width) * 100;
+    const dyPct = ((e.clientY - start.y) / rect.height) * 100;
+    const newX = Math.max(0, Math.min(100, start.posX - dxPct));
+    const newY = Math.max(0, Math.min(100, start.posY - dyPct));
+    p.photoPosX = newX;
+    p.photoPosY = newY;
+    const img = box.querySelector('img');
+    if(img) img.style.objectPosition = newX + '% ' + newY + '%';
+  });
+  const endDrag = () => {
+    if(!dragging) return;
+    dragging = false;
+    box.style.cursor = 'grab';
+    saveCatalog();
+  };
+  box.addEventListener('pointerup', endDrag);
+  box.addEventListener('pointercancel', endDrag);
+  box.addEventListener('pointerleave', endDrag);
+}
+
+function compressImage(file, maxDim, quality){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if(w > maxDim || h > maxDim){
+          if(w > h){ h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('image load failed'));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error('file read failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
 function triggerUpload(p){
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  input.addEventListener('change', (e) => {
+  input.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if(!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      p.photo = reader.result;
+    try{
+      const dataUrl = await compressImage(file, 1000, 0.78);
+      p.photo = dataUrl;
+      p.photoPosX = 50;
+      p.photoPosY = 50;
+      p.photoFit = p.photoFit || 'cover';
       renderParts();
       saveCatalog();
-    };
-    reader.readAsDataURL(file);
+    }catch(err){
+      alert('Could not process that photo — try a different image.');
+    }
   });
   input.click();
 }
@@ -889,6 +991,21 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 });
 
 document.getElementById('downloadBtn').addEventListener('click', () => window.print());
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  btn.innerText = 'Saving…';
+  readDomIntoCurrent();
+  await saveCatalog();
+  if(lastSyncOK === false){
+    btn.innerHTML = '&#9888; Not synced';
+    alert('Could not reach the database — this device\'s copy is saved, but it has not synced to the cloud yet. Check your internet connection and press Save again.');
+  } else {
+    btn.innerHTML = '&#10003; Saved';
+  }
+  setTimeout(() => { btn.innerHTML = '&#128190; Save'; btn.disabled = false; }, 1500);
+});
 
 document.getElementById('refreshBtn').addEventListener('click', async () => {
   const btn = document.getElementById('refreshBtn');
