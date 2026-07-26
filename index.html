@@ -343,9 +343,14 @@
     body{background:#fff;}
     .sheet-wrap{padding:0;}
     .sheet{max-width:100%; border:none; box-shadow:none;}
-    .photo-box{resize:none;}
+    .photo-box{resize:none; width:65px !important; height:65px !important;}
     .resizable{resize:none; overflow:visible;}
-    table.parts{border-collapse:separate; border-spacing:0;}
+    table.parts{border-collapse:separate; border-spacing:0; table-layout:fixed; width:100%;}
+    .col-sr{width:36px;}
+    .col-photo{width:80px;}
+    .col-dyn{min-width:0; width:auto; word-break:break-word;}
+    .dyn-field{white-space:normal; word-break:break-word;}
+    .th-label{white-space:normal; overflow:visible; text-overflow:clip; padding-left:0;}
     table.parts thead{display:table-header-group;}
     table.parts tbody tr{page-break-inside:avoid; break-inside:avoid-page;}
     .wave-banner, .contact-strip, .catalog-title-row, .terms-box, .sheet-footer{page-break-inside:avoid; break-inside:avoid-page;}
