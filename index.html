@@ -342,10 +342,11 @@
     .toolbar, .add-row, .row-del, .col-act, .col-remove, .move-btns, .col-move, .photo-size-btns, .photo-remove, .photo-label, .fs-popup, .resize-hint{display:none !important;}
     body{background:#fff;}
     .sheet-wrap{padding:0;}
-    .sheet{max-width:100%; border:none; box-shadow:none;}
-    .photo-box{resize:none; width:65px !important; height:65px !important;}
+    .sheet{max-width:100%; border:none; box-shadow:none; overflow:hidden;}
+    .photo-box{resize:none; width:65px !important; height:65px !important; max-width:65px !important; max-height:65px !important;}
+    .photo-box img{max-width:100%; max-height:100%;}
     .resizable{resize:none; overflow:visible;}
-    table.parts{border-collapse:separate; border-spacing:0; table-layout:fixed; width:100%;}
+    table.parts{border-collapse:separate; border-spacing:0; table-layout:fixed; width:100%; max-width:100%;}
     .col-sr{width:36px;}
     .col-photo{width:80px;}
     .col-dyn{min-width:0; width:auto; word-break:break-word;}
