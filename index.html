@@ -294,9 +294,10 @@
   .sheet-footer .signoff [contenteditable]:focus{background:rgba(255,255,255,.1);}
   .sheet-footer .signoff strong{font-family:'Oswald',sans-serif; letter-spacing:.03em; color:var(--blue-soft);}
   .sheet-footer .meta{font-family:'IBM Plex Mono',monospace; font-size:calc(10.5px * var(--fs-scale)); color:#8fb3d1; text-align:right;}
-  .sheet-footer .meta{outline:none; border-radius:2px;}
-  .sheet-footer .meta:hover{background:rgba(255,255,255,.1);}
-  .sheet-footer .meta:focus{background:rgba(255,255,255,.18); color:#fff;}
+  .sheet-footer .meta .website{color:var(--blue-soft); margin-bottom:3px; font-weight:600;}
+  .sheet-footer .meta [contenteditable]{outline:none; border-radius:2px;}
+  .sheet-footer .meta [contenteditable]:hover{background:rgba(255,255,255,.1);}
+  .sheet-footer .meta [contenteditable]:focus{background:rgba(255,255,255,.18); color:#fff;}
 
   input[type=file]{display:none;}
 
@@ -353,8 +354,10 @@
     .dyn-field{white-space:normal; word-break:break-word;}
     .th-label{white-space:normal; overflow:visible; text-overflow:clip; padding-left:0;}
     table.parts thead{display:table-header-group;}
-    table.parts tbody tr{page-break-inside:avoid; break-inside:avoid-page;}
-    .wave-banner, .contact-strip, .catalog-title-row, .terms-box, .sheet-footer{page-break-inside:avoid; break-inside:avoid-page;}
+    table.parts tbody tr{page-break-inside:avoid; break-inside:avoid;}
+    table.parts tbody td{page-break-inside:avoid; break-inside:avoid;}
+    .dyn-field, .col-sr{page-break-inside:avoid; break-inside:avoid;}
+    .wave-banner, .contact-strip, .catalog-title-row, .terms-box, .sheet-footer{page-break-inside:avoid; break-inside:avoid;}
     @page{margin:12mm 12mm;}
   }
 </style>
@@ -465,7 +468,10 @@
     </div>
     <div class="sheet-footer">
       <div class="signoff" contenteditable="true" id="signoff"><strong>Warm Regards</strong><br>Shivkripa Auto Industries</div>
-      <div class="meta" contenteditable="true" id="metaLine">Generated 25 Jul 2026</div>
+      <div class="meta">
+        <div class="website" contenteditable="true" id="websiteLine">https://www.shivkripaauto.com</div>
+        <div id="metaLine" contenteditable="true">Generated 25 Jul 2026</div>
+      </div>
     </div>
 
   </div>
@@ -566,6 +572,7 @@ function freshCatalogData(name, withDefaults){
     terms: 'Click here to add your terms and conditions — payment terms, delivery timeline, validity of quote, etc.',
     termsTitle: 'Terms & Conditions',
     genDate: 'Generated ' + new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }),
+    websiteLine: 'https://www.shivkripaauto.com',
     fontScale: 1,
     readyBadge: 'For Customer Review',
     eyebrow: 'Bill of Parts — Reference Catalog',
@@ -662,6 +669,7 @@ function applyCurrentToDom(){
   document.getElementById('termsBody').innerText = current.terms ?? '';
   document.getElementById('termsTitle').innerText = current.termsTitle ?? 'Terms & Conditions';
   document.getElementById('metaLine').innerText = current.genDate ?? ('Generated ' + new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }));
+  document.getElementById('websiteLine').innerText = current.websiteLine ?? 'https://www.shivkripaauto.com';
   document.getElementById('readyBadge').innerText = current.readyBadge ?? 'For Customer Review';
   document.getElementById('eyebrow').innerText = current.eyebrow ?? 'Bill of Parts — Reference Catalog';
   document.getElementById('stampLabel').innerText = current.stampLabel ?? 'Total Items';
@@ -693,6 +701,7 @@ function readDomIntoCurrent(){
   current.terms = document.getElementById('termsBody').innerText;
   current.termsTitle = document.getElementById('termsTitle').innerText;
   current.genDate = document.getElementById('metaLine').innerText;
+  current.websiteLine = document.getElementById('websiteLine').innerText;
   current.readyBadge = document.getElementById('readyBadge').innerText;
   current.eyebrow = document.getElementById('eyebrow').innerText;
   current.stampLabel = document.getElementById('stampLabel').innerText;
@@ -769,7 +778,7 @@ function applyStoredFontSize(el){
   el.style.fontSize = size ? size + 'px' : '';
 }
 
-const STATIC_FS_IDS = ['companyName','companyTag','companyAddr','companyPhone','catalogTitle','catalogSub','signoff','termsBody','termsTitle','metaLine','readyBadge','eyebrow','stampLabel','thSr'];
+const STATIC_FS_IDS = ['companyName','companyTag','companyAddr','companyPhone','catalogTitle','catalogSub','signoff','termsBody','termsTitle','metaLine','websiteLine','readyBadge','eyebrow','stampLabel','thSr'];
 
 function applyAllStoredFontSizes(){
   STATIC_FS_IDS.forEach(id => applyStoredFontSize(document.getElementById(id)));
@@ -1098,7 +1107,7 @@ function bumpFontSize(delta){
 document.getElementById('fsPopupMinus').addEventListener('mousedown', (e) => { e.preventDefault(); bumpFontSize(-1); });
 document.getElementById('fsPopupPlus').addEventListener('mousedown', (e) => { e.preventDefault(); bumpFontSize(1); });
 
-['companyName','companyTag','companyAddr','companyPhone','catalogTitle','catalogSub','signoff','termsBody','termsTitle','metaLine','readyBadge','eyebrow','stampLabel','thSr'].forEach(id => {
+['companyName','companyTag','companyAddr','companyPhone','catalogTitle','catalogSub','signoff','termsBody','termsTitle','metaLine','websiteLine','readyBadge','eyebrow','stampLabel','thSr'].forEach(id => {
   document.getElementById(id).addEventListener('blur', () => {
     readDomIntoCurrent();
     saveCatalog();
