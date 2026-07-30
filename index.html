@@ -374,6 +374,7 @@
     <button class="btn btn-ghost btn-sm" id="importBtn">Upload file</button>
     <input type="file" id="fileImport" accept=".csv,.xlsx,.xls,.pdf" style="display:none">
     <button class="btn btn-ghost btn-sm" id="renameListBtn">Rename</button>
+    <button class="btn btn-ghost btn-sm" id="duplicateListBtn">Duplicate list</button>
     <button class="btn btn-ghost btn-sm" id="deleteListBtn">Delete list</button>
   </div>
   <div class="group">
@@ -1262,6 +1263,24 @@ document.getElementById('renameListBtn').addEventListener('click', async () => {
   entry.name = name.trim();
   await saveIndex();
   populateSelect();
+});
+
+document.getElementById('duplicateListBtn').addEventListener('click', async () => {
+  readDomIntoCurrent();
+  const name = prompt('Name for the duplicated list:', 'Copy of ' + current.catalogTitle);
+  if(!name || !name.trim()) return;
+  const id = 'c' + Date.now();
+  const cloned = JSON.parse(JSON.stringify(current));
+  cloned.catalogTitle = name.trim();
+  cloned.parts = cloned.parts.map(p => ({...p, id: uid()})); // fresh ids so photos save as their own copies, not shared with the original list
+  index.push({id, name: name.trim()});
+  await saveIndex();
+  current = cloned;
+  activeId = id;
+  await saveCatalog();
+  await setActive(id);
+  populateSelect();
+  applyCurrentToDom();
 });
 
 document.getElementById('deleteListBtn').addEventListener('click', async () => {
